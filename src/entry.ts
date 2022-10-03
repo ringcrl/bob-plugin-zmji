@@ -1,6 +1,7 @@
 import * as Bob from "@bob-plug/core";
 import { load, Cheerio, AnyNode } from 'cheerio';
 import { Part, Phonetic } from './helper/types';
+import { run, pageDataToTextList } from './main'
 
 const baseUrl = 'https://dictionary.cambridge.org';
 
@@ -15,7 +16,7 @@ const baseUrl = 'https://dictionary.cambridge.org';
  * @param {*} completion
  */
 function translate(query, completion) {
-    if (query.detectFrom !== 'en' || !query.text || query.text.split(" ").length > 3) {
+    if (!query.text || query.text.split(" ").length > 2) {
         completion({
             error: {
                 type: 'notFound',
@@ -23,21 +24,56 @@ function translate(query, completion) {
         });
         return;
     }
-    let text = query.text.split(" ").join("-");
+    let text = query.text
+
+    // completion({
+    //     result: {
+    //         toParagraphs: [text]
+    //     }
+    // })
+
     Bob.api.$http.get({
-        url: `https://dictionary.cambridge.org/zhs/%E8%AF%8D%E5%85%B8/%E8%8B%B1%E8%AF%AD-%E6%B1%89%E8%AF%AD-%E7%AE%80%E4%BD%93/${text}`,
+        url: `https://www.zmji.net/danci/${text}`,
+        header: {
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+            "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "cache-control": "no-cache",
+            "pragma": "no-cache",
+            "sec-ch-ua": "\"Google Chrome\";v=\"105\", \"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"105\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"macOS\"",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "none",
+            "sec-fetch-user": "?1",
+            "upgrade-insecure-requests": "1",
+            "cookie": "zmji2=userl=74b6d0613fc279c9cd9c4589781b901a; zmji=username=Chenng&userinfo=733a2bcd032b7dd5fdcddcb66084fdc9&userid=9580&zmjiinfo=74b6d0613fc279c9cd9c4589781b901a; Hm_lvt_f21aeb73e240d18ffbf1b16b4a91c446=1662738878,1662822785,1663112718,1663379938; Hm_lpvt_f21aeb73e240d18ffbf1b16b4a91c446=1664751445"
+        },
         handler: (res) => {
-            main(res.data, completion);
-            if (res.error) {
-                Bob.api.$log.error(`reserr: ${Object.keys(res)}`);
-            }
+            const textList = pageDataToTextList(res.data)
+
+            // completion({
+            //     result: {
+            //         toParagraphs: [
+            //             '离开(谐音):泄露*********************v.漏,泄漏n.漏洞,漏隙;泄漏,漏出Atthebreakfast,thesteakleakedfromthebreak.早餐时,肉片从缺口处漏出来.*********************v泄露；渗漏；n裂缝foolproof:fail＝airtight:leak极简单的防止出错＝密封的防止泄露"',
+            //             '裂开→泄露→leakv.泄露；(使)漏n.漏洞，漏隙；泄漏，漏出量leak→立刻→有人泄露了秘密，我们要立刻补上这个漏洞'
+            //         ]
+            //     }
+            // })
+            
+            completion({
+                result: {
+                    toParagraphs: textList
+                }
+            })
+
         }
     });
 }
-const addMap = (map: Map<string, string[]>, key: string ,value: string) => {
+const addMap = (map: Map<string, string[]>, key: string, value: string) => {
     if (map.has(key)) {
         map.get(key)?.push(value);
-    }else {
+    } else {
         map.set(key, [value]);
     }
 }
@@ -54,12 +90,12 @@ const mapToParts = (map: Map<string, string[]>) => {
 const main = (file: any, completion) => {
     const pushPart = (parts, part, ...means) => {
         if (means) {
-          parts.push({
-            part: part.trim(),
-            means: means.map(mean => mean.trim())
-          })
+            parts.push({
+                part: part.trim(),
+                means: means.map(mean => mean.trim())
+            })
         }
-      }
+    }
     const $ = load(file);
     const word = $('.headword').first().text();
     const hasWord = $('.headword').html();
@@ -115,14 +151,14 @@ const main = (file: any, completion) => {
                 word: word
             },
             raw: '',
-            toParagraphs: [ word ],
+            toParagraphs: [word],
         }
         completion({
             result: res
         });
         Bob.api.$log.info(`res${res}`);
 
-    }else {
+    } else {
         completion({
             error: {
                 type: 'notFound',
@@ -277,12 +313,5 @@ const otherLang: Array<[string, string]> = [
 const items: Array<[string, string]> = [["zh-Hans", "zh"], ["zh-Hant", "zh-Hant"], ...otherLang];
 const langMap = new Map(items);
 function supportLanguages() {
-    if (!cache.get(INSTALL)) {
-        // 没有安装过
-        buryPoint("plugin-installed");
-    } else if (cache.get(INSTALL) !== Bob.api.$info.version) {
-        // 更新版本或安装了最初版本，标识为 true
-        buryPoint("plugin-updated");
-    }
-    return ['zh-Hans','en'];
+    return ['zh-Hans', 'zh-Hant','en'];
 }
